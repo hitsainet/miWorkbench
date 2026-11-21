@@ -1,0 +1,198 @@
+# miWorkbench - GCP Docker Deployment
+
+Deploy miWorkbench on a Google Cloud Platform instance with NVIDIA T4 GPU.
+
+**URL**: http://miworkbench.hitsai.net
+
+## Prerequisites
+
+1. **GCP Instance**: n1-standard-4 (or larger) with NVIDIA T4 GPU
+2. **OS**: Ubuntu 22.04 LTS
+3. **NVIDIA Drivers**: Installed via GCP's Deep Learning VM or manually
+4. **DNS**: `miworkbench.hitsai.net` pointing to the instance IP
+5. **Firewall**: Port 80 open
+6. **DNS**: `neuron.hitsai.net` pointing to the instance IP (for Neuronpedia)
+
+## Quick Start
+
+```bash
+# 1. Clone the repository (or copy the docker/ directory)
+git clone https://github.com/hitsainet/miWorkbench.git
+cd miWorkbench/docker
+
+# 2. Run the setup script
+chmod +x setup-gcp.sh
+./setup-gcp.sh
+```
+
+## Variable and folder names (2026-11, ENH-009 P9)
+
+The compose file reads `MIWORKBENCH_POSTGRES_PASSWORD` and `MIWORKBENCH_SECRET_KEY`. For one release it still
+accepts the old names `MISTUDIO_POSTGRES_PASSWORD` and `MISTUDIO_SECRET_KEY` when the new ones are unset, so an <!-- p9: keep, old operator name read for one release (P9-D7) -->
+existing `.env` keeps working; rename the two lines in your `.env` before the next release, which drops the old
+names. The deploy folder is now `/opt/miworkbench` (`setup-gcp.sh`); an existing install under `/opt/mistudio` <!-- p9: keep, rename history -->
+keeps running where it is. The database and role stay `mistudio`, and the volume names are unchanged. <!-- p9: keep, frozen database or role name (DR-19) -->
+
+## Manual Deployment
+
+If you prefer manual deployment:
+
+```bash
+# 1. Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+
+# 2. Install Docker Compose plugin
+sudo apt-get update
+sudo apt-get install -y docker-compose-plugin
+
+# 3. Install NVIDIA Container Toolkit
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+
+# 4. Deploy
+mkdir -p /opt/miworkbench
+cp docker-compose.gcp.yml /opt/miworkbench/docker-compose.yml
+cp nginx.gcp.conf /opt/miworkbench/nginx.gcp.conf
+cd /opt/miworkbench
+docker compose pull
+docker compose up -d
+```
+
+## Services
+
+| Service | Container | Port | Description |
+|---------|-----------|------|-------------|
+| Frontend | miworkbench-frontend | 3000 | React UI (proxied via nginx) |
+| Backend | miworkbench-backend | 8000 | FastAPI + WebSocket |
+| Celery Worker | miworkbench-celery-worker | - | Background tasks (GPU) |
+| Celery Beat | miworkbench-celery-beat | - | Scheduled tasks |
+| PostgreSQL | miworkbench-postgres | 5432 | miWorkbench database |
+| PostgreSQL | neuronpedia-postgres | 5432 | Neuronpedia database |
+| Redis | miworkbench-redis | 6379 | Celery broker |
+| Nginx | miworkbench-nginx | 80 | Reverse proxy |
+| Neuronpedia | neuronpedia-webapp | 3000 (internal) | Feature visualization |
+
+## Access URLs
+
+- **miWorkbench**: http://miworkbench.hitsai.net
+- **Neuronpedia**: http://neuron.hitsai.net
+- **API Documentation**: http://miworkbench.hitsai.net/api/docs
+
+## Common Commands
+
+```bash
+# View all containers
+docker compose ps
+
+# View logs
+docker compose logs -f                    # All services
+docker compose logs -f backend            # Backend only
+docker compose logs -f celery-worker      # Celery worker only
+
+# Restart services
+docker compose restart
+docker compose restart backend            # Restart specific service
+
+# Stop all services
+docker compose down
+
+# Update to latest images
+docker compose pull
+docker compose up -d
+
+# Check GPU usage
+docker exec miworkbench-backend nvidia-smi
+docker exec miworkbench-celery-worker nvidia-smi
+
+# Database access
+docker exec -it miworkbench-postgres psql -U mistudio -d mistudio
+docker exec -it neuronpedia-postgres psql -U neuronpedia -d neuronpedia
+
+# Run database migrations
+docker exec miworkbench-backend python -m alembic upgrade head
+```
+
+## Data Persistence
+
+Data is stored in Docker volumes:
+- `mistudio_postgres_data` - miWorkbench PostgreSQL data <!-- p9: keep, frozen volume name (DR-41) -->
+- `neuronpedia_postgres_data` - Neuronpedia PostgreSQL data
+- `mistudio_redis_data` - Redis data <!-- p9: keep, frozen volume name (DR-41) -->
+- `mistudio_data` - Model checkpoints, datasets, SAEs <!-- p9: keep, frozen volume name (DR-41) -->
+
+To backup:
+```bash
+docker run --rm -v mistudio_data:/data -v $(pwd):/backup alpine tar cvf /backup/mistudio_data_backup.tar /data  # p9: keep, frozen volume name (DR-41)
+```
+
+## Troubleshooting
+
+### GPU not available in containers
+```bash
+# Verify GPU is accessible
+docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
+
+# If not, reconfigure nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+### Services not starting
+```bash
+# Check logs for errors
+docker compose logs backend
+docker compose logs celery-worker
+
+# Check if databases are healthy
+docker compose ps
+```
+
+### WebSocket connection issues
+- Ensure nginx is properly proxying WebSocket connections
+- Check browser console for connection errors
+- Verify port 80 is accessible
+
+### Database connection errors
+```bash
+# Check PostgreSQL is running
+docker compose logs postgres
+docker compose logs neuronpedia-postgres
+
+# Test connection
+docker exec miworkbench-postgres pg_isready -U mistudio -d mistudio
+```
+
+## Security Notes
+
+For production deployment:
+1. Change all `*_secure_pw_2026` passwords in docker-compose.yml
+2. Change `SECRET_KEY` and `NEXTAUTH_SECRET` values
+3. Consider adding HTTPS with Let's Encrypt
+4. Restrict firewall rules to only necessary IPs
+5. Enable GCP IAM authentication if needed
+
+## GCP Firewall Rules
+
+Create firewall rules to allow HTTP traffic:
+
+```bash
+gcloud compute firewall-rules create allow-miworkbench-http \
+    --allow tcp:80 \
+    --target-tags=miworkbench \
+    --description="Allow HTTP access to miWorkbench"
+```
+
+Then add the `miworkbench` network tag to your instance.
+
+**DNS Configuration:**
+Both domains must point to your GCP instance IP:
+- `miworkbench.hitsai.net` → miWorkbench
+- `neuron.hitsai.net` → Neuronpedia
