@@ -1,0 +1,790 @@
+"""
+REACHABILITY for the model-management MCP tools (both products).
+
+    A capability is not shipped until a test FAILS when its wiring is removed.
+
+These tools exist because the workflow that needed them was unreachable over
+MCP: "unload the current gguf, download and load the IQ4 version, test it."
+Every step was a REST route and none was a tool, so the sequence had to be run
+with `curl` inside the pod.
+
+The three shapes from `test_reachability.py`, because each catches what the
+others cannot:
+
+  1. REGISTRY     — the category is in the maps that make it selectable
+  2. BUILT SERVER — the REAL `build_server()` exposes the tools
+  3. CALLER       — each tool issues its documented method and path, with the
+                    PAYLOAD and the CALL COUNT asserted; "was called" passes
+                    against a call sending the wrong arguments
+
+MUTATION CONTROLS (each must turn this file red):
+  * remove "models"/"miserver_models" from CATEGORY_MODULES or
+    MISERVER_CATEGORY_MODULES        -> registry + built server fail
+  * remove either from VALID_CATEGORIES   -> "selectable" fails
+  * remove "models" from DEFAULT_CATEGORIES -> "on by default" fails
+  * drop a @mcp.tool() decorator          -> built server fails
+  * re-point a path or drop a body key    -> caller fails
+  * drop the delete acknowledgement gate  -> the refusal tests fail
+  * drop the context read from miserver_list_models -> "reports the ACTUAL
+    context" fails
+"""
+
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from src.mcp_server.config import DEFAULT_CATEGORIES, VALID_CATEGORIES
+from src.mcp_server.tools import CATEGORY_MODULES, MISERVER_CATEGORY_MODULES, all_categories
+from tests.support.external_ctx import make_ctx
+from tests.support.miserver_fakes import approval_actions, as_sent
+
+MIWORKBENCH_TOOLS = {
+    "list_models",
+    "get_model",
+    "get_model_architecture",
+    "download_model",
+    "cancel_model_download",
+    "delete_model",
+}
+
+MISERVER_TOOLS = {
+    "miserver_list_models",
+    "miserver_get_model",
+    "miserver_preview_model_repo",
+    "miserver_download_model",
+    "miserver_cancel_download",
+    "miserver_load_model",
+    "miserver_unload_model",
+    "miserver_delete_model",
+    "miserver_set_model_context_ceiling",
+}
+
+
+# ── Shape 1: registry ──────────────────────────────────────────────────────
+
+
+class TestRegistry:
+    def test_both_categories_are_in_the_module_registry(self):
+        assert CATEGORY_MODULES.get("models"), "models registered with no modules"
+        assert MISERVER_CATEGORY_MODULES.get("miserver_models"), "miserver_models has no modules"
+
+    def test_both_categories_are_selectable(self):
+        """Absent here, MCP_TOOL_CATEGORIES=models RAISES at startup instead of
+        enabling — which looks exactly like the tools not existing.
+
+        VALID_CATEGORIES is hand-maintained and cannot be derived in config.py
+        (tools imports config, so importing back would be a cycle), so this is
+        the only thing holding the two lists together.
+        """
+        assert "models" in VALID_CATEGORIES
+        assert "miserver_models" in VALID_CATEGORIES
+
+    def test_miWorkbench_models_is_on_by_default(self):
+        """These tools talk only to miWorkbench's own API. Gating them behind an
+        explicit opt-in makes them unreachable for any agent that does not
+        already know to ask."""
+        assert "models" in {c.strip() for c in DEFAULT_CATEGORIES.split(",")}
+
+    def test_miserver_models_is_NOT_on_by_default(self):
+        """Every miserver_* category needs a second product running. On by default
+        it would register tools that answer `unavailable` on a deployment that
+        has no miServer at all."""
+        assert "miserver_models" not in {c.strip() for c in DEFAULT_CATEGORIES.split(",")}
+
+    def test_the_category_lists_agree(self):
+        """The guard config.py's comment points at.
+
+        VALID_CATEGORIES is a second copy of the registry. A category present
+        in one and missing from the other is either a tool nobody can enable or
+        a category name that enables nothing — both silent.
+        """
+        registered = set(all_categories())
+        assert registered == VALID_CATEGORIES, (
+            "VALID_CATEGORIES and the module registries disagree: "
+            f"only registered={sorted(registered - VALID_CATEGORIES)}, "
+            f"only valid={sorted(VALID_CATEGORIES - registered)}"
+        )
+
+    def test_the_modules_expose_register(self):
+        for module in all_categories()["models"] + all_categories()["miserver_models"]:
+            assert hasattr(module, "register")
+
+
+# ── Shape 2: built server ──────────────────────────────────────────────────
+
+
+class TestBuiltServer:
+    """The REAL build_server(), not a hand-called register()."""
+
+    def _build(self, categories: str, monkeypatch):
+        from src.mcp_server.config import MCPSettings
+        from src.mcp_server.server import build_server
+
+        monkeypatch.setenv("MISERVER_API_URL", "http://millm.test")
+        settings = MCPSettings(tool_categories=categories, allow_anonymous=True)
+        mcp, _client = build_server(settings, stdio=True)
+        return {t.name for t in asyncio.run(mcp.list_tools())}
+
+    def test_build_server_exposes_every_miWorkbench_model_tool(self, monkeypatch):
+        names = self._build("models", monkeypatch)
+        for expected in MIWORKBENCH_TOOLS:
+            assert expected in names, (
+                f"{expected} is not reachable from build_server() — "
+                "registration exists but nothing reaches it"
+            )
+
+    def test_build_server_exposes_every_miServer_model_tool(self, monkeypatch):
+        names = self._build("miserver_models", monkeypatch)
+        for expected in MISERVER_TOOLS:
+            assert expected in names, f"{expected} is not reachable"
+
+    def test_the_tools_are_absent_when_the_categories_are_not_enabled(self, monkeypatch):
+        """Specificity: without this, the tests above prove nothing about wiring."""
+        names = self._build("read", monkeypatch)
+        assert not ((MIWORKBENCH_TOOLS | MISERVER_TOOLS) & names)
+
+    def test_miserver_model_tools_are_skipped_with_no_miServer_configured(self, monkeypatch):
+        """A deployment with no miServer must not advertise tools that can only
+        answer `unavailable`."""
+        from src.mcp_server.config import MCPSettings
+        from src.mcp_server.server import build_server
+
+        monkeypatch.setenv("MISERVER_API_URL", "")
+        settings = MCPSettings(
+            tool_categories="models,miserver_models", allow_anonymous=True
+        )
+        mcp, _client = build_server(settings, stdio=True)
+        names = {t.name for t in asyncio.run(mcp.list_tools())}
+
+        assert MIWORKBENCH_TOOLS <= names, "miWorkbench's own tools must be unaffected"
+        assert not (MISERVER_TOOLS & names)
+
+    def test_the_default_configuration_reaches_the_miWorkbench_tools(self, monkeypatch):
+        names = self._build(DEFAULT_CATEGORIES, monkeypatch)
+        assert MIWORKBENCH_TOOLS <= names
+
+
+class TestTheDeploymentEnablesThem:
+    """Registration in code is necessary and NOT sufficient.
+
+    `k8s/base/mcp.yaml` sets MCP_TOOL_CATEGORIES explicitly, and an explicit
+    list OVERRIDES DEFAULT_CATEGORIES. That is how 19 circuit tools and 16
+    millm_circuit_* tools stayed unreachable in production while registered,  (p9: keep, dated lesson: the tools' names then)
+    tested and documented.
+    """
+
+    def _deployed_categories(self):
+        import pathlib
+        import re
+
+        manifest = (
+            pathlib.Path(__file__).resolve().parents[3] / "k8s" / "base" / "mcp.yaml"
+        )
+        assert manifest.exists(), f"manifest not found at {manifest}"
+        text = manifest.read_text()
+        match = re.search(
+            r"name:\s*MCP_TOOL_CATEGORIES\b.*?value:\s*\"([^\"]+)\"", text, re.S
+        )
+        assert match, (
+            "MCP_TOOL_CATEGORIES not found in k8s/base/mcp.yaml — this guard "
+            "reads the manifest, and a scrape that matches nothing asserts "
+            "nothing"
+        )
+        # Mapped as the server maps them (042 TPD-5): the P3 manifest's `miserver_*` keys are this image's
+        # `miserver_*` categories.
+        from src.core.legacy_names import CATEGORY_ALIASES
+
+        return {CATEGORY_ALIASES.get(c.strip(), c.strip()) for c in match.group(1).split(",") if c.strip()}
+
+    def test_the_scrape_finds_a_plausible_list(self):
+        """Negative control: a source scrape that matches nothing FAILS OPEN,
+        which has happened twice in this repo — including inside a reachability
+        guard."""
+        deployed = self._deployed_categories()
+        assert len(deployed) >= 10, f"only found {deployed} — the scrape broke"
+        assert "read" in deployed
+
+    @pytest.mark.parametrize("category", ["models", "miserver_models"])
+    def test_the_deployment_enables_the_category(self, category):
+        assert category in self._deployed_categories(), (
+            f"{category} is registered in code but absent from "
+            "k8s/base/mcp.yaml's explicit MCP_TOOL_CATEGORIES, so every tool "
+            "in it is invisible in production"
+        )
+
+
+# ── Shape 3: caller ────────────────────────────────────────────────────────
+
+
+class _Handler:
+    """A `RouteBackend` whose miServer answers are completed as miServer sends them (`miserver_fakes.as_sent`)."""
+
+    def __init__(self, backend, product):
+        self.handler = as_sent(backend.handler, product)
+
+
+def _miworkbench_tools(*, row=None, row_down=False):
+    """`models.register` on the REAL client over per-route fakes (046 FTASKS 3.4), each verb recorded.
+    `row`: what `GET /models/{id}` answers; `row_down`: that read fails (an outage)."""
+    from mcp.server.mcpserver import MCPServer
+
+    from src.mcp_server.client import MiWorkbenchClient
+    from src.mcp_server.config import MCPSettings
+    from src.mcp_server.tools import models
+    from tests.support.mcp_drive import RouteBackend, recorded_client
+
+    from tests.support.fake_clients import workbench_answer
+
+    # 046 FTASKS 7.3: each answer in its route's contract shape (these fakes once answered miServer's envelope,
+    # which no miWorkbench route sends; the fake check now judges them).
+    backend = RouteBackend()
+    backend.answer("GET", "/api/v1/models", workbench_answer("GET", "/api/v1/models", {"data": []}))
+    backend.answer("GET", "/api/v1/models/{}/architecture", {})
+    if row_down:
+        backend.answer("GET", "/api/v1/models/{}", {"detail": "backend down"}, status=503)
+    else:
+        backend.answer("GET", "/api/v1/models/{}", row if row is not None else
+                       workbench_answer("GET", "/api/v1/models/m_1", {"id": "m_1"}))
+    backend.answer("POST", "/api/v1/models/download",
+                   workbench_answer("POST", "/api/v1/models/download", {"id": "m_1", "status": "downloading"}))
+    backend.answer("DELETE", "/api/v1/models/{}", "", status=204)
+    backend.answer("DELETE", "/api/v1/models/{}/cancel", {})
+    mcp = MCPServer("test")
+    client = recorded_client(MiWorkbenchClient("http://miworkbench.test"), _Handler(backend, "miworkbench"),
+                             "http://miworkbench.test/api/v1")
+    models.register(mcp, client, MCPSettings(allow_anonymous=True))
+    return mcp, client
+
+
+def _miserver_tools(get_return=None, *, inference=None, inference_down=False, row_down=False):
+    """`miserver_models.register` on the REAL client over per-route fakes in miServer's contract shapes (046 FTASKS
+    3.4: judged by the fake check), each verb recorded. `get_return={"data": X}` is what the old mock client handed
+    the tools: X is now the `data` of the route's envelope (a list for the collection, a row for one model)."""
+    from mcp.server.mcpserver import MCPServer
+
+    from src.mcp_server.miserver_client import MiServerClient
+    from tests.support.mcp_drive import RouteBackend, recorded_client
+    from tests.support.miserver_fakes import envelope
+
+    data = (get_return or {}).get("data")
+    backend = RouteBackend()
+    # ENH-008: the relayed tools first read miServer's approval actions (fail closed). `client.get`'s await count
+    # therefore includes that read for load/unload/delete; the route calls are on post/delete.
+    backend.answer("GET", "/api/approvals/actions", envelope(approval_actions(["model_load", "model_unload",
+                                                                               "model_delete"])))
+    backend.answer("GET", "/api/models", envelope(data if isinstance(data, list) else []))
+    if row_down:
+        backend.answer("GET", "/api/models/{}", {"success": False, "error": {"code": "X", "message": "down"}},
+                       status=503)
+    else:
+        backend.answer("GET", "/api/models/{}", envelope(data if isinstance(data, dict) else {}))
+    if inference_down:
+        backend.answer("GET", "/api/health/inference", {"detail": "engine not answering"}, status=503)
+    else:
+        backend.answer("GET", "/api/health/inference", inference or {})
+    backend.answer("POST", "/api/models/preview", envelope({}))
+    backend.answer("POST", "/api/models", envelope({}), status=202)
+    backend.answer("POST", "/api/models/{}/load", envelope({}), status=202)  # started: no pending header
+    for path in ("/api/models/{}/unload", "/api/models/{}/cancel"):
+        backend.answer("POST", path, envelope({}))
+    backend.answer("DELETE", "/api/models/{}", envelope(None))
+    gate = MagicMock()
+    gate.check = AsyncMock(return_value=(True, None))
+    mcp = MCPServer("test")
+    client = recorded_client(MiServerClient("http://millm.test"), _Handler(backend, "miserver"), "http://millm.test")
+
+    from src.mcp_server.tools import miserver_models
+
+    # These tests pin the miServer call itself; the ENH-008 relay (pending answer, fail-closed check,
+    # call order and count through the live registry) is asserted in test_miserver_approvals_relay.py.
+    miserver_models.register(mcp, client, gate, make_ctx())
+    return mcp, client
+
+
+class TestMiWorkbenchCallers:
+    def test_list_models_issues_a_GET_with_its_limit(self):
+        mcp, client = _miworkbench_tools()
+        asyncio.run(mcp.call_tool("list_models", {}))
+
+        assert client.get.await_count == 1
+        assert client.get.await_args.args[0] == "/models"
+        assert client.get.await_args.kwargs == {"limit": 50}
+
+    def test_list_models_forwards_every_filter_it_is_given(self):
+        """PAYLOAD, not just address: a dropped filter returns the whole
+        catalogue and looks like a working call."""
+        mcp, client = _miworkbench_tools()
+        asyncio.run(
+            mcp.call_tool(
+                "list_models",
+                {"search": "gemma", "status": "ready", "architecture": "gemma3", "limit": 10},
+            )
+        )
+
+        assert client.get.await_args.kwargs == {
+            "limit": 10,
+            "search": "gemma",
+            "status": "ready",
+            "architecture": "gemma3",
+        }
+
+    def test_get_model_addresses_the_row(self):
+        mcp, client = _miworkbench_tools()
+        asyncio.run(mcp.call_tool("get_model", {"model_id": "m_abc"}))
+
+        assert client.get.await_count == 1
+        assert client.get.await_args.args[0] == "/models/m_abc"
+
+    def test_architecture_addresses_the_architecture_subresource(self):
+        mcp, client = _miworkbench_tools()
+        asyncio.run(mcp.call_tool("get_model_architecture", {"model_id": "m_abc"}))
+
+        assert client.get.await_args.args[0] == "/models/m_abc/architecture"
+
+    def test_download_posts_the_whole_body(self):
+        """A dropped `quantization` silently downloads at the API default,
+        which is a different model from the one that was asked for."""
+        mcp, client = _miworkbench_tools()
+        asyncio.run(
+            mcp.call_tool(
+                "download_model",
+                {"repo_id": "google/gemma-2-2b", "quantization": "Q8",
+                 "trust_remote_code": True},
+            )
+        )
+
+        assert client.post.await_count == 1
+        assert client.post.await_args.args[0] == "/models/download"
+        assert client.post.await_args.kwargs == {
+            "json_body": {
+                "repo_id": "google/gemma-2-2b",
+                "quantization": "Q8",
+                "trust_remote_code": True,
+                "gpu": "auto",
+            }
+        }
+
+    def test_a_named_gpu_travels_in_the_body(self):
+        """A dropped `gpu` silently runs the inspection load on Auto's card."""
+        mcp, client = _miworkbench_tools()
+        uuid = "GPU-247aa582-0d1b-e161-8156-983ed1fefc57"
+        asyncio.run(mcp.call_tool("download_model", {"repo_id": "a/b", "gpu": uuid}))
+
+        assert client.post.await_count == 1
+        assert client.post.await_args.kwargs["json_body"]["gpu"] == uuid
+
+    def test_a_token_is_sent_only_when_given(self):
+        mcp, client = _miworkbench_tools()
+        asyncio.run(
+            mcp.call_tool("download_model", {"repo_id": "a/b", "access_token": "t"})
+        )
+        assert client.post.await_args.kwargs["json_body"]["access_token"] == "t"
+
+    def test_cancel_addresses_the_cancel_subresource(self):
+        mcp, client = _miworkbench_tools()
+        asyncio.run(mcp.call_tool("cancel_model_download", {"model_id": "m_abc"}))
+
+        assert client.delete.await_count == 1
+        assert client.delete.await_args.args[0] == "/models/m_abc/cancel"
+
+
+class TestMiWorkbenchDeleteIsGated:
+    """The gate is the point of the tool, so it is asserted before the call."""
+
+    def test_an_unacknowledged_delete_issues_NO_call(self):
+        mcp, client = _miworkbench_tools()
+        asyncio.run(mcp.call_tool("delete_model", {"model_id": "m_abc"}))
+
+        assert client.delete.await_count == 0, (
+            "the model was deleted without acknowledgement — the gate is the "
+            "only thing between a stale id and an irreversible delete"
+        )
+
+    def test_the_refusal_names_what_would_be_destroyed(self):
+        """A refusal that does not say WHICH model leaves the agent no way to
+        tell a stale id from the right one.
+
+        046 review round 1: this fake was `{"data": {..., "size_mb": 5120}}`, a shape the route never sends, and it
+        agreed by construction with a `.get("data")` that read None off the real row. It is now the route's own
+        response model, so the refusal is checked against what miWorkbench actually answers."""
+        from src.schemas.model import ModelResponse
+
+        row = ModelResponse(id="m_abc", name="gemma-2-2b", architecture="gemma2", params_count=1, quantization="FP16",
+                            status="ready", disk_size_bytes=5 * 1024 ** 3, created_at="2026-11-26T00:00:00Z",
+                            updated_at="2026-11-26T00:00:00Z").model_dump(mode="json")
+        mcp, client = _miworkbench_tools(row=row)
+        result = asyncio.run(mcp.call_tool("delete_model", {"model_id": "m_abc"}))
+
+        text = str(result)
+        assert "gemma-2-2b" in text
+        assert "5.0 GB" in text, f"the size was not reported: {text}"
+        assert "delete_not_acknowledged" in text
+
+    def test_the_refusal_still_works_when_the_row_cannot_be_read(self):
+        """FAILS OPEN on the lookup, not on the gate: an outage must not make
+        the tool unusable, and must not make it delete silently either."""
+        mcp, client = _miworkbench_tools(row_down=True)
+
+        result = asyncio.run(mcp.call_tool("delete_model", {"model_id": "m_abc"}))
+
+        assert "delete_not_acknowledged" in str(result)
+        assert client.delete.await_count == 0
+
+    def test_an_acknowledged_delete_issues_exactly_one_DELETE(self):
+        mcp, client = _miworkbench_tools()
+        asyncio.run(
+            mcp.call_tool(
+                "delete_model", {"model_id": "m_abc", "acknowledge_permanent": True}
+            )
+        )
+
+        assert client.delete.await_count == 1
+        assert client.delete.await_args.args[0] == "/models/m_abc"
+        assert client.get.await_count == 0, (
+            "an acknowledged delete should not re-read the row it is about to "
+            "destroy"
+        )
+
+
+class TestMiServerCallers:
+    def test_list_addresses_the_models_collection(self):
+        mcp, client = _miserver_tools()
+        asyncio.run(mcp.call_tool("miserver_list_models", {}))
+
+        assert client.get.await_count == 1
+        assert client.get.await_args.args[0] == "/api/models"
+
+    def test_preview_posts_the_repo_id(self):
+        mcp, client = _miserver_tools()
+        asyncio.run(
+            mcp.call_tool("miserver_preview_model_repo", {"repo_id": "a/b-GGUF"})
+        )
+
+        assert client.post.await_count == 1
+        assert client.post.await_args.args[0] == "/api/models/preview"
+        assert client.post.await_args.kwargs == {"json_body": {"repo_id": "a/b-GGUF"}}
+
+    def test_download_carries_the_chosen_quantization_and_its_files(self):
+        """The whole reason the picker exists. Dropping `gguf_files` downloads
+        EVERY quantization in the repo — 121 GB measured, against 2.78 GB for
+        the one that was chosen."""
+        mcp, client = _miserver_tools()
+        asyncio.run(
+            mcp.call_tool(
+                "miserver_download_model",
+                {
+                    "repo_id": "m/gemma-GGUF",
+                    "quantization": "Q4",
+                    "gguf_label": "IQ4_XS",
+                    "gguf_files": ["gemma.IQ4_XS.gguf"],
+                },
+            )
+        )
+
+        assert client.post.await_count == 1
+        # ⚠ THIS ASSERTION PINNED THE DEFECT until 2026-09-27. It read
+        # "/api/models/download", which miServer does not serve and never did — the
+        # download is POST on the collection. The tool and this test agreed with each
+        # other and both were wrong, so the whole tool 404'd for every agent that ever
+        # called it while this file stayed green. A caller assertion can only ever prove
+        # a tool matches its own documentation; whether that documentation names a REAL
+        # route is what miServer's test_mcp_tool_paths_are_real.py checks, and it was
+        # pointed at miserver_circuits alone until the probe surface was added beside it.
+        assert client.post.await_args.args[0] == "/api/models"
+        assert client.post.await_args.kwargs == {
+            "json_body": {
+                "source": "huggingface",
+                "repo_id": "m/gemma-GGUF",
+                "quantization": "Q4",
+                "trust_remote_code": False,
+                "gguf_label": "IQ4_XS",
+                "gguf_files": ["gemma.IQ4_XS.gguf"],
+            }
+        }
+
+    def test_an_ordinary_download_sends_no_gguf_keys(self):
+        """`gguf_files: null` is not the same as absent to the validator, and
+        an empty list is REFUSED — it would match nothing and report success
+        over an empty directory."""
+        mcp, client = _miserver_tools()
+        asyncio.run(mcp.call_tool("miserver_download_model", {"repo_id": "g/gemma-2-2b"}))
+
+        body = client.post.await_args.kwargs["json_body"]
+        assert "gguf_files" not in body and "gguf_label" not in body
+
+    def test_load_addresses_the_load_subresource(self):
+        mcp, client = _miserver_tools()
+        asyncio.run(mcp.call_tool("miserver_load_model", {"model_id": 44}))
+
+        assert client.post.await_count == 1
+        assert client.post.await_args.args == ("/api/models/44/load",)
+        # Feature 034: no lease header unless one is passed; `full=True` keeps the headers.
+        assert client.post.await_args.kwargs == {"headers": None, "full": True}
+
+    def test_unload_addresses_the_unload_subresource(self):
+        mcp, client = _miserver_tools()
+        asyncio.run(mcp.call_tool("miserver_unload_model", {"model_id": 44}))
+
+        assert client.post.await_count == 1
+        assert client.post.await_args.args[0] == "/api/models/44/unload"
+
+    def test_cancel_addresses_the_cancel_subresource(self):
+        mcp, client = _miserver_tools()
+        asyncio.run(mcp.call_tool("miserver_cancel_download", {"model_id": 44}))
+
+        assert client.post.await_args.args[0] == "/api/models/44/cancel"
+
+    def test_get_addresses_the_row(self):
+        mcp, client = _miserver_tools(get_return={"data": {"id": 44}})
+        asyncio.run(mcp.call_tool("miserver_get_model", {"model_id": 44}))
+
+        assert client.get.await_count == 1
+        assert client.get.await_args.args[0] == "/api/models/44"
+
+
+class TestMiServerListReportsTheActualContext:
+    """A GGUF model loads at the largest context that FITS, not the one asked
+    for: 8192 requested, 4096 obtained, on both quantizations tried on this
+    card. A 4703-token prompt against a 4096 window is the next thing a user
+    hits, and nothing else on the system explains it.
+    """
+
+    def test_the_resident_model_carries_the_live_context(self):
+        mcp, client = _miserver_tools(get_return={"data": [{"id": 44, "name": "g:IQ4_XS", "status": "loaded",
+                                                             "context_length": None}]},
+                                      inference={"context_length": 4096})
+        result = asyncio.run(mcp.call_tool("miserver_list_models", {}))
+
+        assert "4096" in str(result), (
+            "the actual context window was not reported — the requested one is "
+            "not what the engine got"
+        )
+
+    def test_a_model_merely_on_disk_is_not_given_a_context(self):
+        """It is a property of the running engine. Attaching it to a row that
+        is not loaded would state a window nothing has measured."""
+        mcp, client = _miserver_tools(get_return={"data": [{"id": 43, "name": "g:Q4_K_M", "status": "ready"}]},
+                                      inference={"context_length": 4096})
+        result = asyncio.run(mcp.call_tool("miserver_list_models", {}))
+
+        # 046: miServer always sends `context_length` (null on a row not loaded); the engine's 4096 is not attached.
+        assert "4096" not in str(result) and [c.args[0] for c in client.get.calls] == ["/api/models"]
+
+    def test_nothing_resident_means_no_second_call(self):
+        mcp, client = _miserver_tools(get_return={"data": [{"id": 1, "status": "ready"}]})
+        asyncio.run(mcp.call_tool("miserver_list_models", {}))
+
+        assert client.get.await_count == 1, (
+            "the engine was asked for a context window with nothing loaded"
+        )
+
+    def test_an_unreadable_context_is_reported_as_unknown(self):
+        """Silence would read as 'no limit', which is the opposite of true."""
+        mcp, client = _miserver_tools(get_return={"data": [{"id": 44, "status": "loaded", "context_length": None}]},
+                                      inference_down=True)
+        result = asyncio.run(mcp.call_tool("miserver_list_models", {}))
+
+        assert "unknown" in str(result).lower()
+
+
+class TestDownloadProgressIsHonest:
+    """`download_progress` is written in-process and reads null from another
+    worker. A client rendering null as 0% shows a stalled bar over a healthy
+    download, and the two cases need opposite reactions."""
+
+    def test_unknown_progress_is_distinguished_from_no_progress(self):
+        mcp, client = _miserver_tools(
+            get_return={"data": [{"id": 1, "status": "downloading",
+                                  "download_progress": None}]}
+        )
+        result = asyncio.run(mcp.call_tool("miserver_list_models", {}))
+
+        assert "UNKNOWN, not zero" in str(result)
+
+    def test_a_real_percentage_is_left_alone(self):
+        mcp, client = _miserver_tools(
+            get_return={"data": [{"id": 1, "status": "downloading",
+                                  "download_progress": 42}]}
+        )
+        result = asyncio.run(mcp.call_tool("miserver_list_models", {}))
+
+        assert "UNKNOWN, not zero" not in str(result)
+
+    def test_a_ready_model_gets_no_progress_note(self):
+        mcp, client = _miserver_tools(
+            get_return={"data": [{"id": 1, "status": "ready",
+                                  "download_progress": None}]}
+        )
+        result = asyncio.run(mcp.call_tool("miserver_list_models", {}))
+
+        assert "progress_note" not in str(result)
+
+
+class TestMiServerDeleteIsGated:
+    def test_an_unacknowledged_delete_issues_NO_delete(self):
+        mcp, client = _miserver_tools(get_return={"data": {"name": "g", "status": "ready"}})
+        asyncio.run(mcp.call_tool("miserver_delete_model", {"model_id": 43}))
+
+        assert client.delete.await_count == 0
+
+    def test_the_refusal_names_the_model_its_label_and_its_size(self):
+        mcp, client = _miserver_tools(
+            get_return={"data": {"name": "gemma-GGUF:IQ4_XS", "gguf_label": "IQ4_XS",
+                                 "disk_size_mb": 16081, "status": "ready"}}
+        )
+        result = asyncio.run(mcp.call_tool("miserver_delete_model", {"model_id": 44}))
+
+        text = str(result)
+        assert "gemma-GGUF:IQ4_XS" in text
+        assert "IQ4_XS" in text
+        assert "15.7 GB" in text, f"the size was not reported: {text}"
+
+    def test_the_refusal_survives_an_unreadable_row(self):
+        mcp, client = _miserver_tools(row_down=True)
+
+        result = asyncio.run(mcp.call_tool("miserver_delete_model", {"model_id": 44}))
+
+        assert "delete_not_acknowledged" in str(result)
+        assert client.delete.await_count == 0
+
+    def test_an_acknowledged_delete_issues_exactly_one_DELETE(self):
+        mcp, client = _miserver_tools()
+        asyncio.run(
+            mcp.call_tool(
+                "miserver_delete_model",
+                {"model_id": 44, "acknowledge_permanent": True},
+            )
+        )
+
+        assert client.delete.await_count == 1
+        assert client.delete.await_args.args[0] == "/api/models/44"
+
+
+class TestTheGateDegradesGracefully:
+    """miServer being down must yield a structured answer, not an exception —
+    tools are never unregistered (contract §3)."""
+
+    @pytest.mark.parametrize("tool_name", sorted(MISERVER_TOOLS))
+    def test_every_miserver_model_tool_reports_unavailable(self, tool_name):
+        from mcp.server.mcpserver import MCPServer
+
+        from src.mcp_server.miserver_client import MiServerClient
+        from src.mcp_server.tools import miserver_models
+        from tests.support.mcp_drive import RouteBackend, recorded_client
+
+        mcp = MCPServer("test")
+        # A closed gate: nothing may be sent. The real client on a fake that answers no route (046 FTASKS 3.4).
+        client = recorded_client(MiServerClient("http://millm.test"), RouteBackend(), "http://millm.test")
+        gate = MagicMock()
+        gate.check = AsyncMock(return_value=(False, "connection refused"))
+        miserver_models.register(mcp, client, gate, make_ctx())
+
+        args = {
+            "miserver_list_models": {},
+            "miserver_get_model": {"model_id": 1},
+            "miserver_preview_model_repo": {"repo_id": "a/b"},
+            "miserver_download_model": {"repo_id": "a/b"},
+            "miserver_cancel_download": {"model_id": 1},
+            "miserver_load_model": {"model_id": 1},
+            "miserver_unload_model": {"model_id": 1},
+            "miserver_delete_model": {"model_id": 1},
+            "miserver_set_model_context_ceiling": {"model_id": 1, "context_ceiling": 65536},
+        }[tool_name]
+
+        result = asyncio.run(mcp.call_tool(tool_name, args))
+
+        assert "unavailable" in str(result)
+        assert client.delete.await_count == 0
+        assert client.post.await_count == 0
+        assert client.put.await_count == 0
+
+
+class TestAManifestAheadOfItsImageDoesNotCrashTheServer:
+    """The incident this deploy actually caused, reproduced.
+
+    `k8s/base/mcp.yaml` and the backend image ship on DIFFERENT SCHEDULES:
+    ArgoCD syncs the manifest within minutes, the image takes about nine. For
+    that gap the new manifest runs against an image whose VALID_CATEGORIES
+    predates it. `enabled_categories()` raised, so the MCP server crashlooped —
+    six restarts on 2026-09-07, and only the rolling update kept a healthy pod
+    serving. Had the old pod been evicted in that window the server would have
+    been down outright, for a config that becomes valid on its own.
+
+    Simulated by asking for a category name that does not exist, which is
+    precisely what `models` WAS to the previous image.
+
+    MUTATION CONTROLS:
+      * restore the raise in enabled_categories -> "comes up" fails
+      * honour unknown names instead of dropping -> "enables nothing" fails
+      * drop unknown_categories from /health     -> "is reported" fails
+    """
+
+    def test_the_server_comes_up_with_the_categories_it_understands(self, monkeypatch):
+        from src.mcp_server.config import MCPSettings
+        from src.mcp_server.server import build_server
+
+        monkeypatch.setenv("MISERVER_API_URL", "http://millm.test")
+        settings = MCPSettings(
+            tool_categories="read,models,a_category_from_a_later_release",
+            allow_anonymous=True,
+        )
+
+        mcp, _client = build_server(settings, stdio=True)
+        names = {t.name for t in asyncio.run(mcp.list_tools())}
+
+        assert MIWORKBENCH_TOOLS <= names, (
+            "the categories this build DOES understand must still register"
+        )
+
+    def test_the_unknown_category_enables_nothing(self):
+        """Fail-closed where it matters. Dropping the crash must not become
+        'accept anything'."""
+        from src.mcp_server.config import MCPSettings
+
+        cats = MCPSettings(
+            tool_categories="read,a_category_from_a_later_release",
+            allow_anonymous=True,
+        ).enabled_categories()
+
+        assert cats == {"read"}
+
+    def test_the_dropped_name_is_reported_on_health(self, monkeypatch):
+        """Silence is how a whole category goes missing unnoticed."""
+        import json
+
+        from starlette.testclient import TestClient
+
+        from src.mcp_server.config import MCPSettings
+        from src.mcp_server.server import build_server
+
+        monkeypatch.setenv("MISERVER_API_URL", "http://millm.test")
+        settings = MCPSettings(
+            tool_categories="read,models,a_category_from_a_later_release",
+            allow_anonymous=True,
+        )
+        mcp, _client = build_server(settings, stdio=True)
+
+        with TestClient(mcp.streamable_http_app()) as client:
+            body = json.loads(client.get("/health").content)
+
+        assert body["unknown_categories"] == ["a_category_from_a_later_release"]
+        assert "models" in body["categories"]
+
+    def test_health_stays_quiet_when_every_name_is_understood(self, monkeypatch):
+        """Specificity: a key that is always present says nothing."""
+        import json
+
+        from starlette.testclient import TestClient
+
+        from src.mcp_server.config import MCPSettings
+        from src.mcp_server.server import build_server
+
+        monkeypatch.setenv("MISERVER_API_URL", "http://millm.test")
+        settings = MCPSettings(tool_categories="read,models", allow_anonymous=True)
+        mcp, _client = build_server(settings, stdio=True)
+
+        with TestClient(mcp.streamable_http_app()) as client:
+            body = json.loads(client.get("/health").content)
+
+        assert "unknown_categories" not in body

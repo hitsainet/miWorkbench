@@ -1,0 +1,215 @@
+{
+  "description": "Which layer stack a resolver must hook on a multi-tower (composite) model, shared by miWorkbench (producer) and miServer (consumer). A composite checkpoint (Gemma 3 and 4 ...ForConditionalGeneration, LLaVA, Qwen2.5-VL) declares its vision tower before its text decoder, so a first-match search over the module tree hooks a vision encoder layer that a text forward never runs (ENH-011 #2). Every resolver must return the TEXT DECODER's layer list: the stack whose owning module also owns the model's input token embedding. Its depth must equal config.get_text_config(decoder=True).num_hidden_layers, and a mismatch is refused, never guessed. Each case names the transformers config and model classes, the dotted path of the text decoder's layer list (text_layers_path) and of the vision stack a first-match search would have taken (vision_layers_path, absent for a single-tower control), and tiny_config: the keyword arguments that build a CPU-sized copy with random weights, so both repos test the same models without downloading anything. text_depth is that tiny copy's text depth. Change a case HERE first, then both resolvers; miServer keeps a byte-identical copy.",
+  "version": 1,
+  "transformers": "5.20.2",
+  "cases": [
+    {
+      "family": "gemma4",
+      "config_class": "Gemma4Config",
+      "model_class": "Gemma4ForConditionalGeneration",
+      "text_layers_path": "model.language_model.layers",
+      "text_depth": 3,
+      "vision_layers_path": "model.vision_tower.encoder.layers",
+      "notes": "google/gemma-4-E2B/E4B (miServer's jevify-gemma4-e4b). The vision tower is registered before the language model, so a first-match search hooks the vision encoder.",
+      "tiny_config": {
+        "text_config": {
+          "vocab_size": 128,
+          "vocab_size_per_layer_input": 128,
+          "hidden_size": 32,
+          "hidden_size_per_layer_input": 8,
+          "intermediate_size": 64,
+          "num_hidden_layers": 3,
+          "num_attention_heads": 2,
+          "num_key_value_heads": 1,
+          "head_dim": 16,
+          "max_position_embeddings": 64,
+          "sliding_window": 16,
+          "layer_types": [
+            "sliding_attention",
+            "sliding_attention",
+            "full_attention"
+          ]
+        },
+        "vision_config": {
+          "hidden_size": 32,
+          "intermediate_size": 64,
+          "num_hidden_layers": 2,
+          "num_attention_heads": 2,
+          "num_key_value_heads": 2,
+          "head_dim": 16,
+          "patch_size": 4,
+          "position_embedding_size": 64
+        },
+        "audio_config": null
+      }
+    },
+    {
+      "family": "gemma4_unified",
+      "config_class": "Gemma4UnifiedConfig",
+      "model_class": "Gemma4UnifiedForConditionalGeneration",
+      "text_layers_path": "model.language_model.layers",
+      "text_depth": 3,
+      "notes": "google/gemma-4-12B and larger (model_type gemma4_unified). A unified model: image patches are embedded straight into the text decoder (model.embed_vision), so there is ONE layer stack and the old search already found it, nested under model.language_model. Kept to pin that the new rule still does.",
+      "tiny_config": {
+        "text_config": {
+          "vocab_size": 128,
+          "hidden_size": 32,
+          "intermediate_size": 64,
+          "num_hidden_layers": 3,
+          "num_attention_heads": 2,
+          "num_key_value_heads": 1,
+          "head_dim": 16,
+          "max_position_embeddings": 64,
+          "sliding_window": 16,
+          "layer_types": [
+            "sliding_attention",
+            "sliding_attention",
+            "full_attention"
+          ]
+        },
+        "vision_config": {
+          "hidden_size": 32,
+          "intermediate_size": 64,
+          "num_hidden_layers": 2,
+          "num_attention_heads": 2,
+          "num_key_value_heads": 2,
+          "head_dim": 16,
+          "patch_size": 4,
+          "position_embedding_size": 64
+        },
+        "audio_config": null
+      }
+    },
+    {
+      "family": "gemma3",
+      "config_class": "Gemma3Config",
+      "model_class": "Gemma3ForConditionalGeneration",
+      "text_layers_path": "model.language_model.layers",
+      "text_depth": 3,
+      "vision_layers_path": "model.vision_tower.encoder.layers",
+      "notes": "google/gemma-3-4b/12b/27b. The SigLIP vision tower is registered first.",
+      "tiny_config": {
+        "text_config": {
+          "vocab_size": 128,
+          "hidden_size": 32,
+          "intermediate_size": 64,
+          "num_hidden_layers": 3,
+          "num_attention_heads": 2,
+          "num_key_value_heads": 1,
+          "head_dim": 16,
+          "max_position_embeddings": 64,
+          "sliding_window": 16,
+          "layer_types": [
+            "sliding_attention",
+            "sliding_attention",
+            "full_attention"
+          ]
+        },
+        "vision_config": {
+          "model_type": "siglip_vision_model",
+          "hidden_size": 32,
+          "intermediate_size": 64,
+          "num_hidden_layers": 2,
+          "num_attention_heads": 2,
+          "image_size": 16,
+          "patch_size": 4
+        },
+        "mm_tokens_per_image": 4
+      }
+    },
+    {
+      "family": "qwen2_5_vl",
+      "config_class": "Qwen2_5_VLConfig",
+      "model_class": "Qwen2_5_VLForConditionalGeneration",
+      "text_layers_path": "model.language_model.layers",
+      "text_depth": 3,
+      "vision_layers_path": "model.visual.blocks",
+      "notes": "Qwen/Qwen2.5-VL-*. The vision transformer (model.visual) is registered first; its blocks carry attn and mlp, so they look like transformer layers.",
+      "tiny_config": {
+        "text_config": {
+          "vocab_size": 128,
+          "hidden_size": 32,
+          "intermediate_size": 64,
+          "num_hidden_layers": 3,
+          "num_attention_heads": 2,
+          "num_key_value_heads": 1,
+          "max_position_embeddings": 64,
+          "rope_parameters": {
+            "rope_type": "default",
+            "rope_theta": 10000.0,
+            "mrope_section": [
+              2,
+              3,
+              3
+            ]
+          },
+          "bos_token_id": 1,
+          "eos_token_id": 2
+        },
+        "vision_config": {
+          "depth": 2,
+          "hidden_size": 32,
+          "intermediate_size": 64,
+          "num_heads": 2,
+          "out_hidden_size": 32,
+          "patch_size": 2,
+          "spatial_merge_size": 2,
+          "temporal_patch_size": 2,
+          "window_size": 8,
+          "fullatt_block_indexes": [
+            1
+          ]
+        }
+      }
+    },
+    {
+      "family": "llava",
+      "config_class": "LlavaConfig",
+      "model_class": "LlavaForConditionalGeneration",
+      "text_layers_path": "model.language_model.layers",
+      "text_depth": 3,
+      "vision_layers_path": "model.vision_tower.encoder.layers",
+      "notes": "llava-hf/llava-1.5-* (CLIP vision tower, Llama text decoder). The CLIP encoder is registered first.",
+      "tiny_config": {
+        "text_config": {
+          "model_type": "llama",
+          "vocab_size": 128,
+          "hidden_size": 32,
+          "intermediate_size": 64,
+          "num_hidden_layers": 3,
+          "num_attention_heads": 2,
+          "num_key_value_heads": 1,
+          "max_position_embeddings": 64
+        },
+        "vision_config": {
+          "model_type": "clip_vision_model",
+          "hidden_size": 32,
+          "intermediate_size": 64,
+          "num_hidden_layers": 2,
+          "num_attention_heads": 2,
+          "image_size": 16,
+          "patch_size": 4,
+          "projection_dim": 32
+        },
+        "image_token_index": 127
+      }
+    },
+    {
+      "family": "llama",
+      "config_class": "LlamaConfig",
+      "model_class": "LlamaForCausalLM",
+      "text_layers_path": "model.layers",
+      "text_depth": 3,
+      "notes": "Single-tower control: the resolver must answer exactly as it did before the fix.",
+      "tiny_config": {
+        "vocab_size": 128,
+        "hidden_size": 32,
+        "intermediate_size": 64,
+        "num_hidden_layers": 3,
+        "num_attention_heads": 2,
+        "num_key_value_heads": 1,
+        "max_position_embeddings": 64
+      }
+    }
+  ]
+}

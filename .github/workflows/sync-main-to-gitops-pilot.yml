@@ -1,0 +1,185 @@
+name: Sync main → gitops/pilot
+
+# Auto-syncs main into gitops/pilot on every push to main, ONCE THAT COMMIT'S CI HAS PASSED.
+#
+# Why this exists: gitops/pilot is the deploy branch ArgoCD reads from
+# (k8s/argocd/miworkbench-app.yaml). ArgoCD Image Updater is the only thing that
+# auto-writes there (it commits image digest pins to
+# k8s/base/.argocd-source-miworkbench.yaml, and the neuronpedia Application's pin,
+# which exists only on gitops/pilot). Without this workflow, manifest changes on
+# main would never reach the cluster.
+#
+# Strategy (same as the WASAT monorepo): merge the gated commit → gitops/pilot with
+# -X theirs, then hard-converge every file the gated commit has to its content EXCEPT
+# the Image-Updater-owned pin files, with push-retry against Image Updater commit
+# races. The converge overwrites; it deletes nothing, so a file that exists only on
+# gitops/pilot (a pin) is left alone.
+#
+# ── THE GATE (ENH-011 WB-1, #13, 2026-11-26) ──────────────────────────────────────────
+# This used to run `on: push` with no `needs:` and merge `origin/main` at run time, so a
+# commit's manifests reached the cluster while its own CI was still running, red or not,
+# and a later unrelated push carried an earlier red commit along. Now:
+#   * `gate` is the mirror sync's gate (sync-to-clean.yml): `private_ci_gate.py` refuses
+#     unless every required CI workflow passed for this exact commit (Backend Tests with
+#     its `all-shards` aggregator);
+#   * `sync` needs it, and merges, converges and orders by the commit the gate passed
+#     (`GATED_SHA`), never by whatever `origin/main` is when it runs;
+#   * syncs run one at a time, and one never moves gitops/pilot backwards: a gated commit
+#     the branch already holds is skipped, and one that is not a descendant of every main
+#     commit the branch holds (a gate that finished after a newer one, for a commit a
+#     force-push dropped) is not merged.
+# backend/tests/unit/test_private_ci_trust.py runs these steps against a fixture remote.
+#
+# RESIDUAL, STATED: the gate proves the commit's tests passed, not that its IMAGE exists.
+# The image is built on the public mirror after the mirror sync (docker-images.yml), so a
+# manifest that names a new image or setting can still reach gitops/pilot minutes before
+# Image Updater pins the image that carries it, exactly as before this gate. Nothing here
+# waits for the image.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+# Least privilege: read-only by default; the job that pushes grants itself write below.
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Require private CI to have passed
+    # HARD STOP: only run in Onegaishimas/miWorkbench (source repo)
+    if: github.repository == 'Onegaishimas/miWorkbench'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read     # list this commit's workflow runs and their jobs
+      contents: read
+    outputs:
+      sha: ${{ steps.gate.outputs.sha }}
+    env:
+      # The same list as the mirror sync's gate (test_private_ci_trust.py requires them equal).
+      REQUIRED_WORKFLOWS: |
+        backend-tests.yml
+        frontend-ci.yml
+    steps:
+      - name: Checkout source repository (full history, for the path-filter fallback)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install the gate's one dependency
+        run: pip install pyyaml==6.0.2
+
+      - name: Require private CI to have passed for this commit
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: python .github/scripts/private_ci_gate.py
+
+  sync:
+    needs: gate
+    # HARD STOP: only run in Onegaishimas/miWorkbench (source repo)
+    if: github.repository == 'Onegaishimas/miWorkbench'
+    runs-on: ubuntu-latest
+    # ONE SYNC AT A TIME. The gates run in parallel and can finish out of order; the syncs
+    # queue here, and the two ordering steps below decide what each may still do.
+    concurrency:
+      group: sync-main-to-gitops-pilot
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    env:
+      # The commit the gate passed. Every merge, converge and ordering decision names it.
+      GATED_SHA: ${{ needs.gate.outputs.sha }}
+    steps:
+      - name: Checkout gitops/pilot
+        uses: actions/checkout@v4
+        with:
+          ref: gitops/pilot
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Skip if gitops/pilot already contains the gated commit
+        id: skip_check
+        run: |
+          git fetch origin main
+          git cat-file -e "${GATED_SHA}^{commit}" 2>/dev/null || git fetch origin "${GATED_SHA}"
+          if git merge-base --is-ancestor "${GATED_SHA}" HEAD; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "gitops/pilot already contains ${GATED_SHA} — no merge needed"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Every main commit gitops/pilot holds must be an ancestor of the gated commit, or this
+      # merge would carry the branch sideways off main's line (a late gate for a commit a
+      # force-push dropped). `origin/main` is read only to say which held commits are main's;
+      # nothing of it is merged.
+      - name: Never move gitops/pilot backwards
+        id: order
+        if: steps.skip_check.outputs.skip != 'true'
+        run: |
+          for held in $(git merge-base --all HEAD origin/main); do
+            if ! git merge-base --is-ancestor "${held}" "${GATED_SHA}"; then
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Not syncing ${GATED_SHA}: gitops/pilot already holds main's ${held}, which ${GATED_SHA} does not contain."
+              exit 0
+            fi
+          done
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "${GATED_SHA} descends from every main commit gitops/pilot holds - syncing."
+
+      - name: Merge the gated commit with -X theirs (main is canonical for non-pin files)
+        if: steps.skip_check.outputs.skip != 'true' && steps.order.outputs.publish != 'false'
+        run: |
+          git merge --no-ff --no-edit -X theirs "${GATED_SHA}" || {
+            echo "::error::Merge failed despite -X theirs strategy"
+            git status
+            exit 1
+          }
+
+      - name: Converge non-pin files to the gated commit (kill gitops/pilot-only drift)
+        if: steps.skip_check.outputs.skip != 'true' && steps.order.outputs.publish != 'false'
+        run: |
+          # The gated commit is the single source of truth for everything except the
+          # Image-Updater-owned digest pin files. Hard-reset every path it has to its
+          # exact content, excluding only those files.
+          # Both pin files: the old app's until it is deleted in the P3 window, then the new one's (042 13.10).
+          git checkout "${GATED_SHA}" -- . ':(exclude)k8s/base/.argocd-source-mistudio.yaml' ':(exclude)k8s/base/.argocd-source-miworkbench.yaml'
+          if git diff --cached --quiet; then
+            echo "Already converged with ${GATED_SHA} (no drift to drop)."
+          else
+            git --no-pager diff --cached --stat
+            git commit --no-edit -m "sync: converge non-pin files to ${GATED_SHA} (drop gitops/pilot drift)"
+          fi
+
+      - name: Push with retry on race with Image Updater
+        if: steps.skip_check.outputs.skip != 'true' && steps.order.outputs.publish != 'false'
+        run: |
+          for attempt in 1 2 3; do
+            if git push origin gitops/pilot; then
+              echo "Pushed successfully on attempt $attempt"
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; fetching + rebasing"
+            git pull --rebase -X theirs origin gitops/pilot || {
+              echo "::error::Rebase failed during retry — needs operator attention"
+              exit 1
+            }
+          done
+          echo "::error::Push failed after 3 retries — needs operator attention"
+          exit 1

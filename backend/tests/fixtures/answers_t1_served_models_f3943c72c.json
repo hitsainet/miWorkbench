@@ -1,0 +1,586 @@
+{
+ "DELETE /api/v1/circuits/{circuit_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "DELETE /api/v1/datasets/{dataset_id}/cancel": {
+  "response_model": null,
+  "status_code": 200
+ },
+ "DELETE /api/v1/extractions/{extraction_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "DELETE /api/v1/models/{model_id}": {
+  "response_model": null,
+  "status_code": 204
+ },
+ "DELETE /api/v1/models/{model_id}/cancel": {
+  "response_model": null,
+  "status_code": 200
+ },
+ "DELETE /api/v1/probe-monitors/behaviours/{key}/views/{dataset_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "DELETE /api/v1/probe-monitors/judge-prompts/{prompt_id}": {
+  "response_model": null,
+  "status_code": 204
+ },
+ "DELETE /api/v1/probe-monitors/runs/{run_id}": {
+  "response_model": null,
+  "status_code": 204
+ },
+ "DELETE /api/v1/steering/experiments/{experiment_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/health": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/circuit-capture": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/circuit-discovery/{run_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/circuits": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/circuits/{circuit_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/circuits/{circuit_id}/export": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/cluster-profiles/{profile_id}/export": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/features/{feature_id}/token-analysis": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/jlens/annotations": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/jlens/artifacts/{slug}/document": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/jlens/reports/replication": {
+  "response_model": "Optional[Dict[str, Any]]",
+  "status_code": null
+ },
+ "GET /api/v1/jlens/template-lens/{task_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/labeling/trials": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/labeling/trials/compare/{run_a}/{run_b}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/labeling/trials/{trial_run_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/models/{model_id}/architecture": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/operations/active-jobs": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/operations/gpu-status": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/checklist": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/family": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/family/export-index": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/family/score/{task_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/history": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/model-comparison": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/rules-evaluations": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/success-reports": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/suggested-blend": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/suggested-blend/history": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/behaviours/{key}/versions": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/blend-reports": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/blend-reports/{report_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/blend-reports/{report_id}/scores": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/datasets/{dataset_id}/rows": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/datasets/{dataset_id}/rule-recommendation": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/judge-prompts": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/judge-prompts/midataworks/rubrics": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/judge-prompts/{prompt_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/judge-prompts/{prompt_id}/export": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/judge-runs": {
+  "response_model": "List[Dict[str, Any]]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/probes/{probe_id}/definition": {
+  "response_model": "typing.Any",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/probes/{probe_id}/evaluations/{evaluation_id}/breakdown": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/probes/{probe_id}/score/{task_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/rules-evaluations/{evaluation_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/spot-checks": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/spot-checks/availability": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/spot-checks/{check_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/probe-monitors/success-reports/{report_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "GET /api/v1/saes/{sae_id}/features/by-index/{feature_idx}": {
+  "response_model": "builtins.dict",
+  "status_code": null
+ },
+ "GET /api/v1/steering/experiments": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/steering/experiments/{experiment_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/steering/mode": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/steering/status": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/task-queue/lookup/{task_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/trainings/{training_id}/features/by-index/{feature_idx}": {
+  "response_model": "builtins.dict",
+  "status_code": null
+ },
+ "GET /api/v1/validation-manifests": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/validation-manifests/{manifest_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "GET /api/v1/wsp/captures/preflight": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "PATCH /api/v1/circuits/{circuit_id}": {
+  "response_model": null,
+  "status_code": null
+ },
+ "PATCH /api/v1/probe-monitors/datasets/{dataset_id}/columns": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "PATCH /api/v1/probe-monitors/judge-prompts/{prompt_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "PATCH /api/v1/probe-monitors/probes/{probe_id}/behaviour": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/circuit-capture": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/circuit-capture/{run_id}/cancel": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/circuit-capture/{run_id}/confirm": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/circuit-discovery": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/circuit-discovery/{run_id}/attribution": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/circuit-discovery/{run_id}/attribution/cancel": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/circuit-discovery/{run_id}/build-circuit": {
+  "response_model": null,
+  "status_code": 201
+ },
+ "POST /api/v1/circuit-discovery/{run_id}/cancel": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/circuit-discovery/{run_id}/validate": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/circuit-discovery/{run_id}/validate/cancel": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/circuits": {
+  "response_model": null,
+  "status_code": 201
+ },
+ "POST /api/v1/circuits/calibration-manifests/{manifest_id}/reproduce": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/circuits/import": {
+  "response_model": null,
+  "status_code": 201
+ },
+ "POST /api/v1/circuits/steering-samples": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/circuits/steering-samples/{run_id}/cancel": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/circuits/{circuit_id}/calibration": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/circuits/{circuit_id}/calibration/cancel": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/circuits/{circuit_id}/export-slices": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/circuits/{circuit_id}/faithfulness": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/circuits/{circuit_id}/faithfulness/cancel": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/circuits/{circuit_id}/promote": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/code-rules/{code_sha256}/approval-requests": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/feature-groups/runs/{run_id}/cancel": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/jlens/attention-readout": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/jlens/documents/validate": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/labeling/trials": {
+  "response_model": null,
+  "status_code": 201
+ },
+ "POST /api/v1/probe-monitors/behaviours": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 201
+ },
+ "POST /api/v1/probe-monitors/behaviours/{key}/archive": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/behaviours/{key}/behaviour-verdict/export": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/behaviours/{key}/family/publish": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/behaviours/{key}/family/score-batch": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/behaviours/{key}/success-reports": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/behaviours/{key}/unarchive": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/behaviours/{key}/versions": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 201
+ },
+ "POST /api/v1/probe-monitors/behaviours/{key}/views/{dataset_id}": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/blend-reports": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/blend-reports/{report_id}/cancel": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/blend-reports/{report_id}/rerun": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/judge-prompts": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 201
+ },
+ "POST /api/v1/probe-monitors/judge-prompts/import": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 201
+ },
+ "POST /api/v1/probe-monitors/judge-prompts/import-rubric": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 201
+ },
+ "POST /api/v1/probe-monitors/judge-prompts/preview": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/judge-prompts/try": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/judge-prompts/{prompt_id}/archive": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/judge-prompts/{prompt_id}/clone": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 201
+ },
+ "POST /api/v1/probe-monitors/judge-prompts/{prompt_id}/unarchive": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/judge-prompts/{prompt_id}/versions": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 201
+ },
+ "POST /api/v1/probe-monitors/judge-runs": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/judge-runs/{judge_run_id}/cancel": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/nonsense-text": {
+  "response_model": "typing.Any",
+  "status_code": 201
+ },
+ "POST /api/v1/probe-monitors/probes/{probe_id}/definition": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/probes/{probe_id}/evaluate": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/probes/{probe_id}/evaluations/{evaluation_id}/backfill-truncation": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/probes/{probe_id}/publish": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/probes/{probe_id}/recalibrate": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/probes/{probe_id}/rules-evaluations": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/probes/{probe_id}/score": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/probes/{probe_id}/score-batch": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/rule-sets/validate": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/rule-signals/evaluate": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/rules-evaluations/{evaluation_id}/cancel": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/runs": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/runs/forecast": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "POST /api/v1/probe-monitors/runs/{run_id}/cancel": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/spot-checks": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/probe-monitors/spot-checks/{check_id}/cancel": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/steering/enter-mode": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/steering/exit-mode": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/steering/experiments": {
+  "response_model": null,
+  "status_code": null
+ },
+ "POST /api/v1/validation-manifests/{manifest_id}/reproduce": {
+  "response_model": null,
+  "status_code": 202
+ },
+ "POST /api/v1/wsp/candidates/import": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "POST /api/v1/wsp/captures": {
+  "response_model": "Dict[str, Any]",
+  "status_code": 202
+ },
+ "PUT /api/v1/probe-monitors/behaviours/{key}/probes/{probe_id}/role": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ },
+ "PUT /api/v1/probe-monitors/behaviours/{key}/suggested-blend": {
+  "response_model": "Dict[str, Any]",
+  "status_code": null
+ }
+}

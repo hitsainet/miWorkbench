@@ -1,0 +1,337 @@
+{
+ "DELETE /api/v1/probe-monitors/behaviours/{key}/views/{dataset_id}": [
+  "definition.rule_set.validation.pending_expressions"
+ ],
+ "GET /api/health": [
+  "legacy_names.also_set",
+  "legacy_names.conflicts",
+  "legacy_names.in_use",
+  "legacy_names.retired_but_set",
+  "legacy_names_meta.unobserved_hosts"
+ ],
+ "GET /api/v1/circuits/{circuit_id}": [
+  "edges"
+ ],
+ "GET /api/v1/circuits/{circuit_id}/export": [
+  "edges"
+ ],
+ "GET /api/v1/datasets": [
+  "data[].tokenizations"
+ ],
+ "GET /api/v1/datasets/{dataset_id}/rows": [
+  "rows[].truncated",
+  "splits"
+ ],
+ "GET /api/v1/environment": [
+  "settings.CELERY_CONCURRENCY.processes",
+  "settings.CELERY_MAX_TASKS.processes",
+  "settings.MCP_STEERING_MAX_CONCURRENT.processes",
+  "settings.MCP_STEERING_MAX_NEW_TOKENS.processes",
+  "settings.MCP_TOOL_CATEGORIES.processes",
+  "settings.MIDATAWORKS_API_URL.processes",
+  "settings.MISERVER_API_URL.processes",
+  "settings.bypass_settings_pin.processes",
+  "settings.code_rule_runner_url.processes",
+  "settings.environment.processes",
+  "settings.gpu_worker_mode.processes",
+  "settings.hf_token.processes",
+  "settings.internal_api_url.processes",
+  "settings.judge_prompt_seed_dir.processes",
+  "settings.log_format.processes",
+  "settings.midataworks_api_url.processes",
+  "settings.miforge_api_url.processes",
+  "settings.miserver_api_url.processes",
+  "settings.openai_api_key.processes",
+  "settings.websocket_ping_interval.processes",
+  "settings.websocket_ping_timeout.processes"
+ ],
+ "GET /api/v1/extractions/{extraction_id}/feature-groups": [
+  "groups"
+ ],
+ "GET /api/v1/features/{feature_id}/logit-lens": [
+  "probabilities",
+  "top_tokens"
+ ],
+ "GET /api/v1/features/{feature_id}/related": [
+  "related"
+ ],
+ "GET /api/v1/features/{feature_id}/token-analysis": [
+  "tokens"
+ ],
+ "GET /api/v1/jlens/annotations": [
+  "annotations"
+ ],
+ "GET /api/v1/jlens/artifacts": [
+  "[].degenerate_layers",
+  "[].layers"
+ ],
+ "GET /api/v1/jlens/artifacts/{slug}/document": [
+  "layers",
+  "recipe.per_layer_applicability"
+ ],
+ "GET /api/v1/jlens/artifacts/{slug}/interventions": [
+  "records"
+ ],
+ "GET /api/v1/labeling/trials": [
+  "data"
+ ],
+ "GET /api/v1/labeling/{extraction_job_id}/coverage": [
+  "failure_reasons"
+ ],
+ "GET /api/v1/operations/active-jobs": [
+  "errors",
+  "jobs",
+  "worker_watch.stuck"
+ ],
+ "GET /api/v1/operations/gpu-status": [
+  "cards",
+  "job_read_errors",
+  "worker_watch.stuck"
+ ],
+ "GET /api/v1/probe-monitors/behaviours": [
+  "uncatalogued"
+ ],
+ "GET /api/v1/probe-monitors/behaviours/{key}": [
+  "definition.rule_set.validation.pending_expressions"
+ ],
+ "GET /api/v1/probe-monitors/behaviours/{key}/checklist": [
+  "steps[].evidence"
+ ],
+ "GET /api/v1/probe-monitors/behaviours/{key}/family": [
+  "declared_sub_questions",
+  "members[].flags"
+ ],
+ "GET /api/v1/probe-monitors/behaviours/{key}/model-comparison": [
+  "models[].criteria"
+ ],
+ "GET /api/v1/probe-monitors/behaviours/{key}/rules-evaluations": [
+  "rules_evaluations"
+ ],
+ "GET /api/v1/probe-monitors/behaviours/{key}/success-reports": [
+  "reports"
+ ],
+ "GET /api/v1/probe-monitors/behaviours/{key}/suggested-blend": [
+  "next",
+  "record.behaviour.held_out_columns",
+  "stale_reasons"
+ ],
+ "GET /api/v1/probe-monitors/behaviours/{key}/suggested-blend/history": [
+  "entries"
+ ],
+ "GET /api/v1/probe-monitors/blend-reports": [
+  "reports[].next",
+  "reports[].resolved.flags",
+  "reports[].stale_reasons"
+ ],
+ "GET /api/v1/probe-monitors/blend-reports/{report_id}": [
+  "next",
+  "report.behaviour.held_out_columns",
+  "report.candidates[].criteria",
+  "resolved.flags",
+  "stale_reasons"
+ ],
+ "GET /api/v1/probe-monitors/datasets-page": [
+  "items[].columns"
+ ],
+ "GET /api/v1/probe-monitors/datasets/{dataset_id}/rows": [
+  "other_columns",
+  "rows[].truncated"
+ ],
+ "GET /api/v1/probe-monitors/datasets/{dataset_id}/rule-recommendation": [
+  "cautions",
+  "rules"
+ ],
+ "GET /api/v1/probe-monitors/judge-prompts": [
+  "prompts[].warnings"
+ ],
+ "GET /api/v1/probe-monitors/judge-prompts/{prompt_id}": [
+  "warnings"
+ ],
+ "GET /api/v1/probe-monitors/judge-runs": [
+  "."
+ ],
+ "GET /api/v1/probe-monitors/probes": [
+  "[].published",
+  "[].rung_reasons"
+ ],
+ "GET /api/v1/probe-monitors/probes/{probe_id}": [
+  "judge_runs",
+  "omitted",
+  "probe.published",
+  "probe.rung_reasons",
+  "threshold_transfer.unreachable_sets"
+ ],
+ "GET /api/v1/probe-monitors/probes/{probe_id}/evaluations/{evaluation_id}/breakdown": [
+  "filters"
+ ],
+ "GET /api/v1/probe-monitors/rules-evaluations/{evaluation_id}": [
+  "stale.moved",
+  "stale.next"
+ ],
+ "GET /api/v1/probe-monitors/runs-page": [
+  "items[].eval_dataset_ids"
+ ],
+ "GET /api/v1/probe-monitors/runs/{run_id}": [
+  "eval_dataset_ids"
+ ],
+ "GET /api/v1/probe-monitors/spot-checks": [
+  "spot_checks"
+ ],
+ "GET /api/v1/probe-monitors/success-reports/{report_id}": [
+  "report.criteria",
+  "report.dataset_identity.views",
+  "report.figures",
+  "stale.moved",
+  "stale.next"
+ ],
+ "GET /api/v1/steering/experiments": [
+  "data[].selected_features",
+  "data[].tags"
+ ],
+ "GET /api/v1/steering/experiments/{experiment_id}": [
+  "selected_features",
+  "tags"
+ ],
+ "GET /api/v1/steering/status": [
+  "cache.model_ids",
+  "cache.sae_ids"
+ ],
+ "GET /api/v1/task-queue/active": [
+  "data"
+ ],
+ "GET /api/v1/task-queue/lookup/{task_id}": [
+  "found"
+ ],
+ "GET /api/v1/trainings": [
+  "data[].extraction_ids"
+ ],
+ "GET /api/v1/trainings/{training_id}": [
+  "extraction_ids"
+ ],
+ "GET /api/v1/wsp/captures/preflight": [
+  "gpu.cards"
+ ],
+ "PATCH /api/v1/circuits/{circuit_id}": [
+  "edges"
+ ],
+ "PATCH /api/v1/probe-monitors/judge-prompts/{prompt_id}": [
+  "warnings"
+ ],
+ "PATCH /api/v1/probe-monitors/probes/{probe_id}/behaviour": [
+  "rung.everyday_text.sets",
+  "rung.in_distribution_passed",
+  "rung.judge_sets_completed",
+  "rung.nonsense_text.sets",
+  "rung.out_of_distribution_passed"
+ ],
+ "POST /api/v1/circuits": [
+  "edges"
+ ],
+ "POST /api/v1/circuits/import": [
+  "edges"
+ ],
+ "POST /api/v1/circuits/{circuit_id}/promote": [
+  "edges"
+ ],
+ "POST /api/v1/datasets/download": [
+  "tokenizations"
+ ],
+ "POST /api/v1/jlens/documents/validate": [
+  "document.layers",
+  "document.recipe.per_layer_applicability"
+ ],
+ "POST /api/v1/jlens/watchlists": [
+  "document.recipe.per_layer_applicability",
+  "document.templates"
+ ],
+ "POST /api/v1/probe-monitors/behaviours": [
+  "adopted.probes",
+  "adopted.prompts",
+  "adopted.runs",
+  "adopted.views",
+  "warnings"
+ ],
+ "POST /api/v1/probe-monitors/behaviours/{key}/archive": [
+  "definition.rule_set.validation.pending_expressions"
+ ],
+ "POST /api/v1/probe-monitors/behaviours/{key}/behaviour-verdict/export": [
+  "definition.combiner_vectors[].expect.members_fired",
+  "definition.combiner_vectors[].expect.members_missing",
+  "definition.combiner_vectors[].expect.members_vetoed",
+  "definition.end_to_end_vectors",
+  "definition.members[].forms"
+ ],
+ "POST /api/v1/probe-monitors/behaviours/{key}/success-reports": [
+  "report.criteria",
+  "report.dataset_identity.views",
+  "report.figures",
+  "stale.moved",
+  "stale.next"
+ ],
+ "POST /api/v1/probe-monitors/behaviours/{key}/unarchive": [
+  "definition.rule_set.validation.pending_expressions"
+ ],
+ "POST /api/v1/probe-monitors/behaviours/{key}/versions": [
+  "definition.rule_set.validation.pending_expressions",
+  "warnings"
+ ],
+ "POST /api/v1/probe-monitors/behaviours/{key}/views/{dataset_id}": [
+  "definition.rule_set.validation.pending_expressions"
+ ],
+ "POST /api/v1/probe-monitors/blend-reports": [
+  "resolved.flags"
+ ],
+ "POST /api/v1/probe-monitors/blend-reports/{report_id}/rerun": [
+  "resolved.flags"
+ ],
+ "POST /api/v1/probe-monitors/judge-prompts/import": [
+  "warnings"
+ ],
+ "POST /api/v1/probe-monitors/judge-prompts/import-rubric": [
+  "warnings"
+ ],
+ "POST /api/v1/probe-monitors/judge-prompts/preview": [
+  "warnings"
+ ],
+ "POST /api/v1/probe-monitors/judge-prompts/{prompt_id}/archive": [
+  "warnings"
+ ],
+ "POST /api/v1/probe-monitors/judge-prompts/{prompt_id}/clone": [
+  "warnings"
+ ],
+ "POST /api/v1/probe-monitors/judge-prompts/{prompt_id}/unarchive": [
+  "warnings"
+ ],
+ "POST /api/v1/probe-monitors/judge-prompts/{prompt_id}/versions": [
+  "warnings"
+ ],
+ "POST /api/v1/probe-monitors/nonsense-text": [
+  "manifest.exclude_view_ids"
+ ],
+ "POST /api/v1/probe-monitors/rule-sets/validate": [
+  "pending_expressions"
+ ],
+ "POST /api/v1/probe-monitors/rule-signals/evaluate": [
+  "fired"
+ ],
+ "POST /api/v1/probe-monitors/runs/forecast": [
+  "rule_recommendation.cautions",
+  "rule_recommendation.rules"
+ ],
+ "POST /api/v1/steering/experiments": [
+  "results.outputs",
+  "selected_features",
+  "tags"
+ ],
+ "POST /api/v1/wsp/captures": [
+  "gpu.cards"
+ ],
+ "PUT /api/v1/probe-monitors/behaviours/{key}/probes/{probe_id}/role": [
+  "definition.rule_set.validation.pending_expressions"
+ ],
+ "PUT /api/v1/probe-monitors/behaviours/{key}/suggested-blend": [
+  "next",
+  "record.behaviour.held_out_columns",
+  "stale_reasons"
+ ]
+}

@@ -1,0 +1,32 @@
+"""`decide_in` comes from the product row's `approval_owner` (042 FR-042.16, TPD-8; FTID §3.10; FTASKS 12.7 – 12.8,
+control K-12.34).
+
+`ProductSpec.approval_owner` was read by nothing before the P3 cut (FTDD §17 C1). It is wired now: a relayed pending
+answer carries `decide_in: <row name>` only for a row whose owner is `"product"` (the product's own queue decides).
+Through the LIVE registry and the real `MiServerClient` on a fake miServer (the `test_miserver_approvals_relay.py`
+harness), every relayed tool's pending answer says `decide_in: "miserver"` — the row's name, not a literal.
+"""
+from __future__ import annotations
+
+import pytest
+
+from tests.unit.test_miserver_approvals_relay import _ACTION_FOR, RELAYED, _MiServer, _pending, live  # noqa: F401
+
+
+@pytest.mark.parametrize("tool", sorted(RELAYED))
+def test_decide_in_from_approval_owner(live, tool):  # noqa: F811
+    from src.mcp_server.products import MISERVER
+
+    assert MISERVER.approval_owner == "product"
+    args, (method, path, _body, _params) = RELAYED[tool]
+    call, _ = live(_MiServer())
+    result = call(tool, args)
+    # 045 FR-7 adds `approval` beside the relayed body (and the follow-up its poll in `next_steps`); every relayed key
+    # is unchanged.
+    assert {k: v for k, v in result.items() if k not in ("approval", "next_steps")} == {
+        **_pending(_ACTION_FOR[(method, path)]), "decide_in": MISERVER.name}
+    # 045 follow-up (2026-11-24): the poll comes first in `next_steps`, with miServer's id.
+    assert result["next_steps"][0]["tool"] == "miserver_get_approval_status"
+    assert result["next_steps"][0]["args"] == {"approval_id": result["approval_id"]}
+    assert result["approval"]["decide_in"] == "miserver" and result["approval"]["then"] == "server_runs"
+    assert result["decide_in"] == "miserver"
